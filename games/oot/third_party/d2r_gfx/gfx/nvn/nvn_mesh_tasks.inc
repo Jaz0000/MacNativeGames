@@ -142,7 +142,15 @@ static NSString *mtk_archive_key(NvShader *ts,NvShader *ms,NvShader *fs,const mt
    warm-up or fill thread writes it to the archive (par_add), as pso_new does for render pipelines. */
 static id<MTLRenderPipelineState> mtk_build(NvShader *ts,NvShader *ms,NvShader *fs,const mtk_pso_key *key,id<MTLFunction> base,int pack,NSError **error,int *from_archive) {
     if(from_archive)*from_archive=0;
-    id<MTLFunction> mesh=mtk_mesh_fn_base(ms,fs,base),packedFs=nil;
+    id<MTLFunction> chosenBase=base;
+    if(!strcmp(ms->key,"ac2f3feb1142742661a038e6907a773304b34e0eaf104d3e1a238d8533e17dbd-b7530f698e76_b")) {
+        MTLCompileOptions *opts=[MTLCompileOptions new];opts.preserveInvariance=YES;opts.mathMode=MTLMathModeSafe;opts.optimizationLevel=MTLLibraryOptimizationLevelSize;
+        NSError *err=nil;NSString *source=sh_src(ms);id<MTLLibrary> lib=[g_dev newLibraryWithSource:source options:opts error:&err];
+        id<MTLFunction> fn=lib?[lib newFunctionWithName:base.name]:nil;
+        if(!fn){if(error)*error=err;return nil;}fn_note_src(fn,source);chosenBase=fn;
+        MLOG("[mesh-size-test] %.16s compiled with size optimization",ms->key);
+    }
+    id<MTLFunction> mesh=mtk_mesh_fn_base(ms,fs,chosenBase),packedFs=nil;
     if(pack)mesh=mtk_pack_varyings(ms,fs,mesh,key->p.dfmt==0,&packedFs);   // nvn_mesh_pack.inc: fewer declared vec4 slots, same values
     MTLRenderPipelineDescriptor *d=pso_desc(&key->p,ms,fs,packedFs,0);
     MTLMeshRenderPipelineDescriptor *m=[MTLMeshRenderPipelineDescriptor new];
